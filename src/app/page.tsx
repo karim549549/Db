@@ -1,10 +1,10 @@
 "use client";
 import React, { useCallback, useState } from "react";
 import Playground from "@/components/Playground";
-import { EntityNode } from "@/components/Entity";
-import { initialNodes, initialEdges } from "@/lib/constants/Intitial";
+import {  EntityNode } from "@/components/Entity";
+import { ChatMessage } from "@/lib/types/chat.type";
+import { useSchemaPersistence } from "@/hooks/useSchemaPersistence";
 import {
-  Edge,
   addEdge,
   applyNodeChanges,
   applyEdgeChanges,
@@ -19,7 +19,7 @@ import ThemeSwitch from "@/components/ThemeSwitch";
 import ShareButton from "@/components/ShareButton";
 import ExportButton from "@/components/ExportButton";
 import { Button } from "@/components/ui/button";
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, Trash2 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import '@xyflow/react/dist/style.css';
 import { generateSchemaAction } from "@/app/actions";
@@ -28,9 +28,9 @@ const nodeTypes = { entity: Entity }; // Added definition
 
 
 export default function Flow() {
-  const [nodes, setNodes] = useState<EntityNode[]>(initialNodes);
-  const [edges, setEdges] = useState<Edge[]>(initialEdges);
+  const { nodes, setNodes, edges, setEdges, clearSchema } = useSchemaPersistence();
   const [isSheetOpen, setIsSheetOpen] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds) as EntityNode[]),
@@ -39,20 +39,31 @@ export default function Flow() {
 
   const onEdgesChange: OnEdgesChange = useCallback((changes) => {
     setEdges((eds) => applyEdgeChanges(changes, eds));
-  }, []);
+  }, [ setEdges ]);
 
   const onConnect: OnConnect = useCallback((connection) => {
     setEdges((eds) => addEdge(connection, eds));
-  }, []);
+  },  [ setEdges ]);
 
-  const handleGenerateSchema = async (userInput: string) => {
+  const handleGenerateSchema = async (userInput: string, chatHistory: ChatMessage[]) => {
     console.log("Generating schema for:", userInput);
+    setIsLoading(true); // Set loading to true
     try {
-      const response = await generateSchemaAction(userInput);
-      setNodes(response.nodes);
-      setEdges(response.edges);
+      const response = await generateSchemaAction(userInput, chatHistory, nodes, edges);
+
+      if (response.type === 'schema') {
+        setNodes(response.nodes || []);
+        setEdges(response.edges || []);
+        return response.message || "Schema updated successfully!";
+      } else if (response.type === 'message') {
+        return response.message;
+      }
+      return undefined; // Should not happen
     } catch (error) {
       console.error("Failed to generate schema:", error);
+      return "Failed to generate schema. Please try again.";
+    } finally {
+      setIsLoading(false); // Set loading to false in finally block
     }
   };
 
@@ -88,7 +99,7 @@ export default function Flow() {
           nodeTypes={nodeTypes} // Passed nodeTypes
         />
 
-        <div className="absolute top-4 left-4 z-20">
+        <div className="absolute top-4 left-4 z-40">
           <AnimatePresence>
             {!isSheetOpen && (
               <motion.div
@@ -106,8 +117,11 @@ export default function Flow() {
           </AnimatePresence>
         </div>
 
-        <div className="absolute top-4 right-4 z-20">
+        <div className="absolute top-4 right-4 z-40">
           <div className="flex items-center gap-2 rounded-lg bg-muted p-3">
+            <Button variant="outline" size="sm" onClick={clearSchema} title="Clear Schema">
+              <Trash2 className="h-4 w-4" />
+            </Button>
             <ExportButton />
             <ShareButton />
             <ThemeSwitch />

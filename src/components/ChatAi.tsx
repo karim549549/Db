@@ -1,25 +1,47 @@
 "use client";
 import React, { useState } from "react";
-import { Bot, X, Send } from "lucide-react";
+import { Bot, X, Send, PlusCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Textarea } from "@/components/ui/textarea"; // Assuming shadcn/ui textarea path
+import { Textarea } from "@/components/ui/textarea";
+import { useChatHistory } from "@/hooks/useChatHistory";
+import { Button } from "@/components/ui/button";
 
 interface ChatAiProps {
-  onGenerateSchema: (userInput: string) => void;
+  onGenerateSchema: (userInput: string, chatHistory: ChatMessage[]) => Promise<string | undefined>;
 }
+
+type ChatMessage = {
+  text: string;
+  sender: 'user' | 'ai';
+};
 
 export default function ChatAi({ onGenerateSchema }: ChatAiProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
+  const { chatHistory, appendMessage, clearHistory } = useChatHistory();
 
   const handleToggle = () => {
     setIsOpen(!isOpen);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (message.trim()) {
-      onGenerateSchema(message);
-      setMessage(""); // Clear textarea after generating
+      const userMessage: ChatMessage = { text: message, sender: 'user' };
+      appendMessage(userMessage);
+      setMessage("");
+
+      const aiResponsePlaceholder: ChatMessage = { text: "Generating schema...", sender: 'ai' };
+      appendMessage(aiResponsePlaceholder);
+
+      try {
+        const aiResponseMessage = await onGenerateSchema(message, chatHistory);
+        if (aiResponseMessage) {
+          appendMessage({ text: aiResponseMessage, sender: 'ai' });
+        }
+      } catch (error) {
+        console.error("Error generating schema:", error);
+        appendMessage({ text: "Error generating schema. Please try again.", sender: 'ai' });
+      }
     }
   };
 
@@ -50,16 +72,35 @@ export default function ChatAi({ onGenerateSchema }: ChatAiProps) {
             {/* Header */}
             <div className="flex justify-between items-center p-4 border-b bg-muted rounded-t-lg">
               <h3 className="font-bold text-lg">Gemini Ai</h3>
-              <button onClick={handleToggle} className="p-1 rounded-full hover:bg-muted-foreground/10">
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="icon" onClick={clearHistory} title="New Chat">
+                  <PlusCircle className="w-5 h-5" />
+                </Button>
+                <button onClick={handleToggle} className="p-1 rounded-full hover:bg-muted-foreground/10">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
-            {/* Chat History (Placeholder) */}
-            <div className="flex-grow p-4 overflow-y-auto">
-              <div className="text-sm text-muted-foreground text-center">
-                Chat history will appear here.
-              </div>
+            {/* Chat History */}
+            <div className="flex-grow p-4 overflow-y-auto space-y-4">
+              {chatHistory.length === 0 ? (
+                <div className="text-sm text-muted-foreground text-center">
+                  Chat history will appear here.
+                </div>
+              ) : (
+                chatHistory.map((msg, index) => (
+                  <div
+                    key={index}
+                    className={`p-2 rounded-lg max-w-[80%] ${msg.sender === 'user'
+                      ? 'bg-primary text-primary-foreground ml-auto'
+                      : 'bg-muted text-muted-foreground mr-auto'
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
+                ))
+              )}
             </div>
 
             {/* Input Area */}

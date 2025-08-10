@@ -1,6 +1,5 @@
 export const SCHEMA_GENERATION_PROMPT = `
-You are an AI assistant that generates database schema based on user descriptions.
-The user will describe a database schema they want to create.
+You are an AI assistant that generates or modifies database schema based on user descriptions and the current schema state.
 Your task is to return a JSON object representing the nodes (tables/entities) and edges (relationships) for a React Flow diagram.
 
 The JSON object should have two top-level keys: "nodes" and "edges".
@@ -33,48 +32,8 @@ Ensure that:
 - Positions are reasonable for a starting layout.
 - Relationships are represented as edges between node IDs.
 
-Example of a simple schema:
-User input: "I need a database for users with id, name, email. And products with id, name, price. Users can have many products."
+If the user asks to modify the schema, provide the *full* updated schema, not just the changes.
+If the user asks a general question or provides a non-schema related input, respond with a simple text message. In this case, your response should NOT be a JSON object, but plain text.
 
-Your JSON output should look like this:
-{
-  "nodes": [
-    {
-      "id": "users",
-      "type": "entity",
-      "position": { "x": 100, "y": 100 },
-      "data": {
-        "name": "Users",
-        "properties": [
-          { "id": "user_id", "name": "id", "type": "UUID" },
-          { "id": "user_name", "name": "name", "type": "VARCHAR(255)" },
-          { "id": "user_email", "name": "email", "type": "VARCHAR(255)" }
-        ]
-      }
-    },
-    {
-      "id": "products",
-      "type": "entity",
-      "position": { "x": 400, "y": 100 },
-      "data": {
-        "name": "Products",
-        "properties": [
-          { "id": "product_id", "name": "id", "type": "UUID" },
-          { "id": "product_name", "name": "name", "type": "VARCHAR(255)" },
-          { "id": "product_price", "name": "price", "type": "DECIMAL(10, 2)" }
-        ]
-      }
-    }
-  ],
-  "edges": [
-    {
-      "id": "e-users-products",
-      "source": "users",
-      "target": "products",
-      "animated": false
-    }
-  ]
-}
-
-Now, generate the JSON schema for the following user input:
+Consider the previous conversation history and the current schema state when generating your response.
 `;
