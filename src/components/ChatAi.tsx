@@ -5,20 +5,44 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Textarea } from "@/components/ui/textarea";
 import { useChatHistory } from "@/hooks/useChatHistory";
 import { Button } from "@/components/ui/button";
-
-interface ChatAiProps {
-  onGenerateSchema: (userInput: string, chatHistory: ChatMessage[]) => Promise<string | undefined>;
-}
+import { useSchemaStore } from "@/stores/schemaStore";
+import { generateSchemaAction } from "@/app/actions";
+import { ChatMessage as ChatMessageType } from "@/lib/types/chat.type";
 
 type ChatMessage = {
   text: string;
   sender: 'user' | 'ai';
 };
 
-export default function ChatAi({ onGenerateSchema }: ChatAiProps) {
+function ChatAi() {
+  const { nodes, edges, setLoading, isLoading ,  setEdges ,  setNodes } = useSchemaStore();
   const [isOpen, setIsOpen] = useState(false);
   const [message, setMessage] = useState("");
   const { chatHistory, appendMessage, clearHistory } = useChatHistory();
+
+  const handleGenerateSchema = async (userInput: string, chatHistory: ChatMessageType[]) => {
+    setLoading(true);
+    try {
+      const response = await generateSchemaAction(userInput, chatHistory, nodes, edges);
+      
+
+      if (response.type === 'schema') {
+        setNodes(response.nodes || []);
+        setEdges(response.edges || []);
+        return response.message || "Schema updated successfully!";
+      } else if (response.type === 'chat') {
+        return response.message;
+      } else if (response.type === 'error') {
+        return response.message || "An error occurred. Please try again.";
+      }
+      return undefined;
+    } catch (error) {
+      console.error("Failed to generate response:", error);
+      return "Failed to generate response. Please try again.";
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleToggle = () => {
     setIsOpen(!isOpen);
@@ -30,17 +54,22 @@ export default function ChatAi({ onGenerateSchema }: ChatAiProps) {
       appendMessage(userMessage);
       setMessage("");
 
-      const aiResponsePlaceholder: ChatMessage = { text: "Generating schema...", sender: 'ai' };
-      appendMessage(aiResponsePlaceholder);
-
       try {
-        const aiResponseMessage = await onGenerateSchema(message, chatHistory);
-        if (aiResponseMessage) {
-          appendMessage({ text: aiResponseMessage, sender: 'ai' });
+        const aiResponse = await handleGenerateSchema(message, chatHistory);
+        
+        if (aiResponse) {
+          
+          // Ensure we're getting just the message text, not the full response object
+          let messageText = aiResponse as string;
+          if (typeof aiResponse === 'object' && aiResponse !== null && 'message' in aiResponse) {
+            messageText = String((aiResponse as Record<string, unknown>).message);
+          }
+          
+          appendMessage({ text: messageText, sender: 'ai' });
         }
       } catch (error) {
-        console.error("Error generating schema:", error);
-        appendMessage({ text: "Error generating schema. Please try again.", sender: 'ai' });
+        console.error("Error generating response:", error);
+        appendMessage({ text: "Error generating response. Please try again.", sender: 'ai' });
       }
     }
   };
@@ -71,7 +100,7 @@ export default function ChatAi({ onGenerateSchema }: ChatAiProps) {
           >
             {/* Header */}
             <div className="flex justify-between items-center p-4 border-b bg-muted rounded-t-lg">
-              <h3 className="font-bold text-lg">Gemini Ai</h3>
+              <h3 className="font-bold text-lg">AI Assistant</h3>
               <div className="flex items-center gap-2">
                 <Button variant="ghost" size="icon" onClick={clearHistory} title="New Chat">
                   <PlusCircle className="w-5 h-5" />
@@ -109,8 +138,9 @@ export default function ChatAi({ onGenerateSchema }: ChatAiProps) {
                 <Textarea
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Describe the nodes and connections you want to create..."
+                  placeholder="Chat with me or describe your database schema needs..."
                   className="pr-12"
+                  disabled={isLoading}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -121,7 +151,7 @@ export default function ChatAi({ onGenerateSchema }: ChatAiProps) {
                 <button
                   onClick={handleGenerate}
                   className="absolute right-2 bottom-2 p-2 bg-orange-600 rounded-md hover:bg-orange-700 disabled:bg-orange-300"
-                  disabled={!message.trim()}
+                  disabled={!message.trim() || isLoading}
                 >
                   <Send className="w-5 h-5 text-white" />
                 </button>
@@ -133,3 +163,5 @@ export default function ChatAi({ onGenerateSchema }: ChatAiProps) {
     </div>
   );
 }
+
+export default ChatAi;

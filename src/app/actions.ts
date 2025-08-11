@@ -3,20 +3,18 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SCHEMA_GENERATION_PROMPT } from "@/lib/prompts";
 import { EntityNode } from "@/components/Entity";
 import { Edge } from "@xyflow/react";
-
-interface SchemaResponse {
-  type: 'schema' | 'message';
-  nodes?: EntityNode[];
-  edges?: Edge[];
-  message?: string;
-}
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-
 import { ChatMessage } from "@/lib/types/chat.type";
 import { Content } from "@google/generative-ai";
 
-// ... (rest of the file)
+interface SchemaResponse {
+  type: "schema" | "chat" | "error";
+  nodes?: EntityNode[];
+  edges?: Edge[];
+  message?: string;
+  reasoning?: string;
+}
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 export async function generateSchemaAction(
   userInput: string,
@@ -24,12 +22,10 @@ export async function generateSchemaAction(
   currentNodes: EntityNode[],
   currentEdges: Edge[]
 ): Promise<SchemaResponse> {
-  // ... (rest of the function)
-
   const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-001" });
 
-  const mappedHistory: Content[] = chatHistory.map(msg => ({
-    role: msg.sender === 'user' ? 'user' : 'model',
+  const mappedHistory: Content[] = chatHistory.map((msg) => ({
+    role: msg.sender === "user" ? "user" : "model",
     parts: [{ text: msg.text }],
   }));
 
@@ -47,26 +43,67 @@ User Input: ${userInput}
 
   try {
     const result = await model.generateContent({
-      contents: [...mappedHistory, { role: 'user', parts: [{ text: fullPrompt }] }],
+      contents: [
+        ...mappedHistory,
+        { role: "user", parts: [{ text: fullPrompt }] },
+      ],
     });
+
     const response = result.response;
-    const text = response.text();
+    let text = response.text();
+    console.log("Raw LLM Response:", text);
 
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+    // 🔹 Remove markdown code fences and trim
+    text = text.replace(/```(?:json)?\s*([\s\S]*?)\s*```/g, "$1").trim();
+    console.log("Sanitized Response:", text);
 
-    if (jsonMatch && jsonMatch[1]) {
-      try {
-        const parsedResponse = JSON.parse(jsonMatch[1]);
-        return { type: 'schema', nodes: parsedResponse.nodes, edges: parsedResponse.edges };
-      } catch (jsonError) {
-        console.error("Error parsing JSON from AI response:", jsonError);
-        return { type: 'message', message: "I received a schema, but it was malformed. Please try again." };
+    // Try to parse the response as JSON first
+    try {
+      const parsedResponse = JSON.parse(text);
+      console.log("Parsed Response:", parsedResponse);
+
+      if (
+        parsedResponse.type === "schema" &&
+        parsedResponse.nodes &&
+        parsedResponse.edges
+      ) {
+        return {
+          type: "schema",
+          nodes: parsedResponse.nodes,
+          edges: parsedResponse.edges,
+          message: parsedResponse.message || "Schema updated successfully!",
+          reasoning: parsedResponse.reasoning,
+        };
       }
-    } else {
-      return { type: 'message', message: text };
+
+      if (parsedResponse.type === "chat") {
+        return {
+          type: "chat",
+          message: parsedResponse.message || "I understand your message.",
+          reasoning: parsedResponse.reasoning,
+        };
+      }
+
+      return {
+        type: "chat",
+        message: parsedResponse.message || text,
+        reasoning: parsedResponse.reasoning,
+      };
+    } catch (err) {
+      console.warn("JSON parsing failed:", err);
+      return {
+        type: "chat",
+        message: text,
+        reasoning:
+          "Response was not in valid JSON format, treating as chat message.",
+      };
     }
   } catch (error) {
     console.error("Error generating content from AI:", error);
-    throw new Error("Failed to generate schema from AI.");
+    return {
+      type: "error",
+      message: "Failed to generate response from AI. Please try again.",
+      reasoning: "AI service error occurred.",
+    };
   }
 }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo } from "react";
 import { Node, NodeProps, Handle, Position } from "@xyflow/react";
 
 export type EntityData = {
@@ -12,7 +12,7 @@ export type EntityData = {
 };
 export type EntityNode = Node<EntityData, "entity">;
 
-export default function Entity({ data }: NodeProps<EntityNode>) {
+function Entity({ data }: NodeProps<EntityNode>) {
   return (
     <div className="rounded-md bg-card shadow-md border border-border overflow-hidden min-w-[200px]">
       <Handle type="target" position={Position.Top} className="w-3 h-3 bg-primary" />
@@ -36,3 +36,5 @@ export default function Entity({ data }: NodeProps<EntityNode>) {
     </div>
   );
 }
+
+export default memo(Entity);
