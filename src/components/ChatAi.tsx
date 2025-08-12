@@ -7,8 +7,7 @@ import { useChatHistory } from "@/hooks/useChatHistory";
 import { Button } from "@/components/ui/button";
 import { useSchemaStore } from "@/stores/schemaStore";
 import { generateSchemaAction } from "@/app/actions";
-import { ChatMessage as ChatMessageType } from "@/lib/types/chat.type";
-
+import { useSchemaContextStore } from "@/stores/schemaContext";
 type ChatMessage = {
   text: string;
   sender: 'user' | 'ai';
@@ -20,15 +19,16 @@ function ChatAi() {
   const [message, setMessage] = useState("");
   const { chatHistory, appendMessage, clearHistory } = useChatHistory();
 
-  const handleGenerateSchema = async (userInput: string, chatHistory: ChatMessageType[]) => {
+  const handleGenerateSchema = async (userInput: string) => {
     setLoading(true);
     try {
-      const response = await generateSchemaAction(userInput, chatHistory, nodes, edges);
+      const response = await generateSchemaAction(userInput, nodes, edges);
       
 
       if (response.type === 'schema') {
         setNodes(response.nodes || []);
         setEdges(response.edges || []);
+        useSchemaContextStore.getState().setContext(response.context_update.summary);
         return response.message || "Schema updated successfully!";
       } else if (response.type === 'chat') {
         return response.message;
@@ -55,11 +55,9 @@ function ChatAi() {
       setMessage("");
 
       try {
-        const aiResponse = await handleGenerateSchema(message, chatHistory);
+        const aiResponse = await handleGenerateSchema(message);
         
         if (aiResponse) {
-          
-          // Ensure we're getting just the message text, not the full response object
           let messageText = aiResponse as string;
           if (typeof aiResponse === 'object' && aiResponse !== null && 'message' in aiResponse) {
             messageText = String((aiResponse as Record<string, unknown>).message);
